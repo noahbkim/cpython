@@ -284,6 +284,16 @@ import_ensure_initialized(PyInterpreterState *interp, PyObject *mod, PyObject *n
         }
         Py_DECREF(value);
     }
+
+    /* -X importtime=2: print if import time output level >= 2. */
+    int import_time = _PyInterpreterState_GetConfig(interp)->import_time;
+    if (import_time >= 2) {
+#define import_level FIND_AND_LOAD(interp).import_level
+        fprintf(stderr, "import time: cached    | cached     | %*s%s\n",
+            import_level*2, "", PyUnicode_AsUTF8(name));
+#undef import_level
+    }
+
     return 0;
 }
 

@@ -1861,6 +1861,51 @@ config_init_pycache_prefix(PyConfig *config)
                               "PYTHONPYCACHEPREFIX");
 }
 
+static PyStatus
+config_set_import_time(PyConfig *config, const wchar_t *value)
+{
+    /* -X importtime(=.*)? */
+    if (value == NULL) {
+    }
+
+    /* We recognize 2 as a special value: if the importtime flag is set
+       to 2, we also print import cache hits. Otherwise, we fall back
+       to standard -X importtime behavior. */
+    else if (wcscmp(value, L"2") == 0) {
+        config->import_time = 2;
+    }
+    else {
+        config->import_time = 1;
+    }
+
+    return _PyStatus_OK();
+}
+
+static PyStatus
+config_read_import_time(PyConfig* config)
+{
+    const wchar_t *xoption_value = NULL;
+    xoption_value = config_get_xoption_value(config, L"importtime");
+    if (xoption_value != NULL)
+    {
+        return config_set_import_time(config, xoption_value);
+    }
+
+    /* If there's no -X importtime, look for ENV flag */
+    wchar_t *env_value = NULL;
+    /* CONFIG_GET_ENV_DUP requires dest to be initialized to NULL */
+    PyStatus status = CONFIG_GET_ENV_DUP(config, &env_value,
+                                         L"PYTHONPROFILEIMPORTTIME",
+                                         "PYTHONPROFILEIMPORTTIME");
+    if (_PyStatus_EXCEPTION(status)) {
+        return status;
+    }
+    if (env_value != NULL) {
+        return config_set_import_time(config, env_value);
+    }
+
+    return _PyStatus_OK();
+}
 
 static PyStatus
 config_read_complex_options(PyConfig *config)
@@ -1872,9 +1917,12 @@ config_read_complex_options(PyConfig *config)
             config->faulthandler = 1;
         }
     }
-    if (config_get_env(config, "PYTHONPROFILEIMPORTTIME")
-       || config_get_xoption(config, L"importtime")) {
-        config->import_time = 1;
+
+    PyStatus status;
+
+    status = config_read_import_time(config);
+    if (_PyStatus_EXCEPTION(status)) {
+        return status;
     }
 
     if (config_get_env(config, "PYTHONNODEBUGRANGES")
@@ -1882,7 +1930,6 @@ config_read_complex_options(PyConfig *config)
         config->code_debug_ranges = 0;
     }
 
-    PyStatus status;
     if (config->tracemalloc < 0) {
         status = config_init_tracemalloc(config);
         if (_PyStatus_EXCEPTION(status)) {
